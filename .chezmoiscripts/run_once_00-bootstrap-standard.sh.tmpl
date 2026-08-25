@@ -18,20 +18,22 @@ fi
 echo "Installing global devbox packages..."
 devbox global install
 
-SHELLENV_LINE='eval "$(devbox global shellenv)"'
-
-add_shellenv() {
-  local rc_file="$1"
+append_once() {
+  local rc_file="$1" line="$2"
   [ -f "$rc_file" ] || touch "$rc_file"
-  if ! grep -qF "$SHELLENV_LINE" "$rc_file"; then
-    printf '\n# devbox global shellenv (added by chezmoi)\n%s\n' "$SHELLENV_LINE" >> "$rc_file"
-    echo "Added devbox shellenv to $rc_file"
+  if ! grep -qF "$line" "$rc_file"; then
+    printf '\n# added by chezmoi\n%s\n' "$line" >> "$rc_file"
+    echo "Added '$line' to $rc_file"
   fi
 }
 
-add_shellenv "$HOME/.bashrc"
+# devbox shellenv must load before starship init (starship binary comes from devbox).
+append_once "$HOME/.bashrc" 'eval "$(devbox global shellenv)"'
+append_once "$HOME/.bashrc" 'eval "$(starship init bash)"'
+
 if [ -n "${ZSH_VERSION:-}" ] || command -v zsh >/dev/null 2>&1; then
-  add_shellenv "$HOME/.zshrc"
+  append_once "$HOME/.zshrc" 'eval "$(devbox global shellenv)"'
+  append_once "$HOME/.zshrc" 'eval "$(starship init zsh)"'
 fi
 
 echo "devbox bootstrap complete. Open a new shell (or 'exec $SHELL') to pick up global packages."

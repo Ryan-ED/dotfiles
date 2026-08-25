@@ -30,10 +30,11 @@ distrobox enter "${CONTAINER_NAME}" -- bash -c '
     curl -fsSL https://get.jetify.com/devbox | bash -f
   fi
   devbox global install
-  SHELLENV_LINE="eval \"\$(devbox global shellenv)\""
   RC_FILE="$HOME/.bashrc"
   touch "$RC_FILE"
-  grep -qF "$SHELLENV_LINE" "$RC_FILE" || printf "\n# devbox global shellenv (added by chezmoi)\n%s\n" "$SHELLENV_LINE" >> "$RC_FILE"
+  # devbox shellenv must load before starship init (starship binary comes from devbox).
+  grep -qF "eval \"\$(devbox global shellenv)\"" "$RC_FILE" || printf "\n# added by chezmoi\neval \"\$(devbox global shellenv)\"\n" >> "$RC_FILE"
+  grep -qF "eval \"\$(starship init bash)\"" "$RC_FILE" || printf "\n# added by chezmoi\neval \"\$(starship init bash)\"\n" >> "$RC_FILE"
 '
 
 echo "devbox is ready inside the '${CONTAINER_NAME}' container."

@@ -29,8 +29,10 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
      in Nix as a side effect of its own installer;
    - runs `devbox global install` to materialize the packages in
      `~/.local/share/devbox/global/default/devbox.json`;
-   - appends `eval "$(devbox global shellenv)"` to `~/.bashrc` (and `~/.zshrc`
-     if zsh is present), idempotently.
+   - appends `eval "$(devbox global shellenv)"` and
+     `eval "$(starship init bash/zsh)"` to `~/.bashrc` (and `~/.zshrc` if zsh
+     is present), idempotently — shellenv first, since `starship` itself is
+     one of the devbox packages and needs to already be on `PATH`.
 
 3. **`.chezmoiscripts/run_once_00-bootstrap-bazzite.sh.tmpl`** runs only when
    `machineClass == bazzite` (no-ops otherwise). Nix's installer is known to
@@ -39,7 +41,9 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    - creates a Fedora-based [Distrobox](https://distrobox.it/) container
      named `devbox` (skipped if it already exists);
    - installs devbox/Nix *inside* that container and runs
-     `devbox global install` there, leaving the host untouched.
+     `devbox global install` there, leaving the host untouched, appending the
+     same `devbox global shellenv` + `starship init bash` lines to the
+     container's own `~/.bashrc`.
 
    Enter the container with `distrobox enter devbox`. To make an individual
    binary available on the host `PATH` without entering the container, use
@@ -54,9 +58,11 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    `~/.local/share/devbox/global/default/devbox.json` (kept `private_` /
    0600 since devbox itself defaults to writing it that way). Current
    packages: `neovim`, `git`, `lazygit`, `ripgrep`, `fd`, `fzf`,
-   `tree-sitter`, `gcc`, `curl`, `nerd-fonts.jetbrains-mono`. Add more by
-   editing this file and running `chezmoi apply` — devbox reconciles
-   installed packages against it.
+   `tree-sitter`, `gcc`, `curl`, `nerd-fonts.jetbrains-mono`, `starship`. Add
+   more by editing this file and running `chezmoi apply` — devbox reconciles
+   installed packages against it. `starship` ships with sensible defaults, so
+   there's no `starship.toml` here yet — add one later if you want a themed
+   prompt.
 
    This list covers every item on
    [LazyVim's requirements](https://www.lazyvim.org/#-requirements): Neovim

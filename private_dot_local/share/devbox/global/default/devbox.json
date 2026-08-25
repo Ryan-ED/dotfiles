@@ -9,6 +9,7 @@
     "tree-sitter@latest",
     "gcc@latest",
     "curl@latest",
-    "nerd-fonts.jetbrains-mono@latest"
+    "nerd-fonts.jetbrains-mono@latest",
+    "starship@latest"
   ]
 }
