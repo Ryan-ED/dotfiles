@@ -153,7 +153,7 @@ sh -c "$(curl -fsLS get.chezmoi.io)"
 With chezmoi installed:
 
 ```bash
-chezmoi init --apply https://github.com/Ryan-ED/dotfiles # or your <git-remote-url>
+chezmoi init --apply <git-remote-url>
 ```
 
 You'll be prompted once for `machineClass`. After that, `chezmoi apply` is
@@ -196,6 +196,58 @@ host (it ships by default on Bazzite; if not, install it before running
 devbox binary to the host — do that per-binary with `distrobox-export` if you
 want e.g. `nvim` callable directly from the host shell instead of via
 `distrobox enter devbox`.
+
+### Manual installs (by design)
+
+Two things are deliberately **not** part of any bootstrap script, kept
+manual on purpose rather than automated:
+
+- **WezTerm itself.** Only its config (`dot_config/wezterm/wezterm.lua`,
+  item 5 above) is managed here — the application is installed separately,
+  per OS: `winget install wez.wezterm` on Windows, your distro's package
+  manager or `flatpak install flathub org.wezfurlong.wezterm` on Linux
+  (Flatpak specifically on Bazzite — see the Bazzite caveat above for why
+  devbox/Distrobox isn't the right place for it), `brew install --cask
+  wezterm` on macOS. It was left out of `devbox.json` because it's a GUI app
+  with real GPU/OpenGL rendering, and Nix-packaged GUI apps on non-NixOS
+  Linux sometimes hit graphics-driver mismatches that OS-native packaging
+  avoids — not worth the risk for the one application you'd be using to fix
+  things if it broke.
+
+- **Switching to zsh.** The bootstrap script writes identical `devbox
+  global shellenv` / `starship init` / `fnm env` lines to *both* `.bashrc`
+  and `.zshrc` so either shell works, but it never installs zsh or runs
+  `chsh` to make it your login shell. That's a manual, one-time step:
+  ```bash
+  sudo apt install zsh      # or pacman/dnf, depending on distro
+  chsh -s $(which zsh)
+  ```
+  then open a new terminal. Reasoning: every script in this repo so far is
+  deliberately unprivileged (no `sudo`, one of the actual selling points of
+  devbox/Nix) — automating this would mean the first `sudo` call in the
+  whole setup, plus per-distro package-manager branching, just to save one
+  copy-pasted command.
+
+  **Ordering matters on a brand-new machine.** The bootstrap script decides
+  whether to touch `.zshrc` at all with a single check — `command -v zsh`,
+  i.e. "does zsh exist right now" — at the one and only moment it ever runs
+  (it's `run_once_*`, tracked by content hash, so it never re-checks later).
+  So on a **new** machine, install and switch to zsh *before* running
+  `chezmoi init --apply`:
+  ```bash
+  sudo apt install zsh      # or pacman/dnf, depending on distro
+  chsh -s $(which zsh)
+  ```
+  then `chezmoi init --apply <repo>`. Done in that order, the bootstrap
+  script's zsh check passes on its one run, and `.zshrc` gets the same
+  `devbox global shellenv` / `starship init zsh` / `fnm env` lines as
+  `.bashrc` automatically — no manual copying needed.
+
+  If zsh gets installed *after* chezmoi already bootstrapped that machine
+  (i.e. the order this repo's own WSL machine actually went through), the
+  script won't retroactively populate a `.zshrc` that didn't exist yet at
+  that time — copy the three `eval` lines over from `.bashrc` manually
+  (swap `starship init bash` for `starship init zsh`).
 
 ## Making changes and syncing them everywhere
 
@@ -248,3 +300,4 @@ update -n` (dry run), then `chezmoi update` for real.
 
 So the full cycle is: edit → `re-add` (only if you edited the live file) →
 commit/push from the source repo → `chezmoi update` everywhere else.
+ 
