@@ -7,6 +7,13 @@
 echo "machineClass=bazzite: skipping host bootstrap, see bootstrap-bazzite script"
 exit 0
 {{- end }}
+{{- /* devbox/Nix aren't supported on native Windows. If chezmoi is ever applied there
+   directly (e.g. so WezTerm's native config gets deployed for machineClass=wsl), skip
+   the devbox bootstrap entirely - only WSL/Linux/macOS get it. */ -}}
+{{- if eq .chezmoi.os "windows" }}
+echo "chezmoi.os=windows: skipping devbox bootstrap (unsupported on native Windows), only deploying plain dotfiles"
+exit 0
+{{- end }}
 
 set -euo pipefail
 
@@ -27,13 +34,16 @@ append_once() {
   fi
 }
 
-# devbox shellenv must load before starship init (starship binary comes from devbox).
+# devbox shellenv must load first - starship and fnm are themselves devbox packages
+# and need to already be on PATH before their own init/hook commands can run.
 append_once "$HOME/.bashrc" 'eval "$(devbox global shellenv)"'
 append_once "$HOME/.bashrc" 'eval "$(starship init bash)"'
+append_once "$HOME/.bashrc" 'eval "$(fnm env --use-on-cd)"'
 
 if [ -n "${ZSH_VERSION:-}" ] || command -v zsh >/dev/null 2>&1; then
   append_once "$HOME/.zshrc" 'eval "$(devbox global shellenv)"'
   append_once "$HOME/.zshrc" 'eval "$(starship init zsh)"'
+  append_once "$HOME/.zshrc" 'eval "$(fnm env --use-on-cd)"'
 fi
 
 echo "devbox bootstrap complete. Open a new shell (or 'exec $SHELL') to pick up global packages."

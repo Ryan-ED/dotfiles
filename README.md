@@ -8,7 +8,7 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
 
 | Machine           | machineClass | Notes                                                        |
 |-------------------|--------------|---------------------------------------------------------------|
-| Windows 11 laptop | `wsl`        | Bootstraps inside WSL/Ubuntu, same as `standard`               |
+| Windows 11 laptop | `wsl`        | `chezmoi apply` run **inside WSL/Ubuntu** for devbox/tooling, **and separately on native Windows** for WezTerm's config — see "WSL + native Windows" below |
 | Arch Linux laptop | `standard`   | Throwaway/testing box                                         |
 | Bazzite laptop    | `bazzite`    | Atomic/ostree — devbox+Nix run in a Distrobox container        |
 | Fedora laptop     | `standard`   | Main daily driver                                              |
@@ -24,15 +24,18 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
 
 2. **`.chezmoiscripts/run_once_00-bootstrap-standard.sh.tmpl`** runs on
    `standard` and `wsl` machines (it no-ops and exits immediately when
-   `machineClass == bazzite`). It:
+   `machineClass == bazzite`, or when `.chezmoi.os == "windows"` — devbox/Nix
+   aren't supported on native Windows at all, so this only ever does real
+   work inside WSL/Linux/macOS). It:
    - installs [devbox](https://www.jetify.com/devbox) if missing, which pulls
      in Nix as a side effect of its own installer;
    - runs `devbox global install` to materialize the packages in
      `~/.local/share/devbox/global/default/devbox.json`;
-   - appends `eval "$(devbox global shellenv)"` and
-     `eval "$(starship init bash/zsh)"` to `~/.bashrc` (and `~/.zshrc` if zsh
-     is present), idempotently — shellenv first, since `starship` itself is
-     one of the devbox packages and needs to already be on `PATH`.
+   - appends `eval "$(devbox global shellenv)"`, `eval "$(starship init
+     bash/zsh)"`, and `eval "$(fnm env --use-on-cd)"` to `~/.bashrc` (and
+     `~/.zshrc` if zsh is present), idempotently — shellenv first, since
+     `starship` and `fnm` are themselves devbox packages and need to already
+     be on `PATH` before their own init commands can run.
 
 3. **`.chezmoiscripts/run_once_00-bootstrap-bazzite.sh.tmpl`** runs only when
    `machineClass == bazzite` (no-ops otherwise). Nix's installer is known to
@@ -42,8 +45,8 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
      named `devbox` (skipped if it already exists);
    - installs devbox/Nix *inside* that container and runs
      `devbox global install` there, leaving the host untouched, appending the
-     same `devbox global shellenv` + `starship init bash` lines to the
-     container's own `~/.bashrc`.
+     same `devbox global shellenv` + `starship init bash` + `fnm env
+     --use-on-cd` lines to the container's own `~/.bashrc`.
 
    Enter the container with `distrobox enter devbox`. To make an individual
    binary available on the host `PATH` without entering the container, use
@@ -58,11 +61,25 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    `~/.local/share/devbox/global/default/devbox.json` (kept `private_` /
    0600 since devbox itself defaults to writing it that way). Current
    packages: `neovim`, `git`, `lazygit`, `ripgrep`, `fd`, `fzf`,
-   `tree-sitter`, `gcc`, `curl`, `nerd-fonts.jetbrains-mono`, `starship`. Add
-   more by editing this file and running `chezmoi apply` — devbox reconciles
-   installed packages against it. `starship` ships with sensible defaults, so
-   there's no `starship.toml` here yet — add one later if you want a themed
-   prompt.
+   `tree-sitter`, `gcc`, `curl`, `nerd-fonts.jetbrains-mono`, `starship`,
+   `fnm`. Add more by editing this file and running `chezmoi apply` — devbox
+   reconciles installed packages against it. `starship` ships with sensible
+   defaults, so there's no `starship.toml` here yet — add one later if you
+   want a themed prompt.
+
+   **`fnm`** (Fast Node Manager) covers per-project Node versions the way
+   [nvm](https://github.com/nvm-sh/nvm) would, reading the same `.nvmrc`
+   files — nvm itself has no Nix package because it isn't a binary at all,
+   just a shell script meant to be sourced, which doesn't map onto Nix's
+   model. `fnm` is a real Nix-packaged binary, but worth being clear about
+   what that does and doesn't buy you: the *switcher* is reproducible, but
+   the actual Node.js versions it downloads per project land in `~/.local/
+   share/fnm`, outside the Nix store and untracked by this repo — same as
+   nvm's runtimes always were. A fully Nix-native alternative exists (a
+   per-project `devbox.json` pinning `nodejs@X`, auto-activated via direnv),
+   but only helps in repos that adopt devbox themselves; `fnm` was chosen
+   here so version-switching still works in any project with a plain
+   `.nvmrc`, regardless of whether it uses devbox.
 
    This list covers every item on
    [LazyVim's requirements](https://www.lazyvim.org/#-requirements): Neovim
@@ -84,6 +101,20 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    `wezterm.target_triple` contains `"windows"` (i.e. WezTerm itself is
    running natively on Windows, launching straight into WSL). On Linux
    machines this check is false and WezTerm uses its normal local domain.
+
+   **Caveat:** WezTerm must be installed natively on Windows (`winget install
+   wez.wezterm`), never inside WSL — it's a GUI app, and the WSL domain
+   setting above is what makes *it* open WSL shells, not a reason to install
+   it there. But that also means its config needs to live at
+   `%USERPROFILE%\.config\wezterm\wezterm.lua` on the Windows side, which
+   `chezmoi apply` run *inside* WSL never touches (WSL's `~` resolves inside
+   the Linux filesystem, a different path entirely). So on the `wsl` machine,
+   you run `chezmoi init --apply <repo>` twice: once inside WSL (for
+   devbox/nvim/starship), and once with chezmoi installed natively on Windows
+   (for `wezterm.lua` and anything else under `dot_config/`) — see "WSL +
+   native Windows" under Usage. The native-Windows run answers the same
+   `machineClass=wsl` prompt but the bootstrap script no-ops there by design
+   (see item 2's OS guard), so it only ever deploys plain files.
 
 6. **`dot_config/nvim/`** — a plain [LazyVim starter](https://github.com/LazyVim/starter)
    config (no pre-existing personal config was found on this machine, so it
@@ -112,12 +143,17 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
 
 ## Usage
 
-On a new machine, with chezmoi installed (via your OS package manager, or a
-one-off `sh -c "$(curl -fsLS get.chezmoi.io)"` if chezmoi itself isn't
-available yet):
+On a new machine if chezmoi itself isn't available yet,
+install it via your OS package manager, or a one-off:
 
 ```bash
-chezmoi init --apply <git-remote-url>
+sh -c "$(curl -fsLS get.chezmoi.io)"
+```
+
+With chezmoi installed:
+
+```bash
+chezmoi init --apply https://github.com/Ryan-ED/dotfiles # or your <git-remote-url>
 ```
 
 You'll be prompted once for `machineClass`. After that, `chezmoi apply` is
@@ -129,6 +165,29 @@ To add packages later: edit `devbox.json` above, `chezmoi apply`, then
 `devbox global install` (or just re-run the relevant bootstrap script's body
 manually — it's idempotent).
 
+### WSL + native Windows
+
+The Windows 11 laptop needs `chezmoi init --apply <repo>` run in **two
+places**, because devbox/Nix work inside WSL but WezTerm's config has to
+land in the native Windows profile:
+
+1. **Inside WSL/Ubuntu** — installs chezmoi + git there if needed, then
+   `chezmoi init --apply <repo>`, answering `wsl` at the prompt. This does
+   the real work: devbox, Nix, starship, the nvim config.
+2. **Natively on Windows** — install chezmoi itself
+   (`winget install twpayne.chezmoi`), then run the same
+   `chezmoi init --apply <repo>` from PowerShell, answering `wsl` again (it's
+   a separate per-OS chezmoi config, so it asks again). The bootstrap script
+   no-ops immediately here (native Windows isn't Linux/macOS), so this run
+   just deploys plain dotfiles — in practice, `wezterm.lua`.
+
+One thing to verify on that second, native-Windows run: chezmoi executes
+`.sh.tmpl` scripts by finding a `sh` interpreter on `PATH`, and even though
+our script no-ops immediately for `chezmoi.os == "windows"`, chezmoi still
+needs to *find* an interpreter to run it at all. Git for Windows (ships
+`sh.exe`) covers this in practice; if it's ever missing, that one script step
+would error rather than silently skip.
+
 ### Bazzite caveat
 
 The Bazzite bootstrap script assumes `distrobox` is already present on the
@@ -137,3 +196,55 @@ host (it ships by default on Bazzite; if not, install it before running
 devbox binary to the host — do that per-binary with `distrobox-export` if you
 want e.g. `nvim` callable directly from the host shell instead of via
 `distrobox enter devbox`.
+
+## Making changes and syncing them everywhere
+
+Example: you tweak `~/.config/wezterm/wezterm.lua` on one machine and want
+that change on all the others. No manual copying between machines — git does
+all the syncing, chezmoi just knows how to turn `dot_config/wezterm/
+wezterm.lua` back into `~/.config/wezterm/wezterm.lua` (and vice versa) on
+each box.
+
+**1. Edit the file — either the live target or the source, your choice:**
+- **Live file** (`~/.config/wezterm/wezterm.lua`) — quick, and lets you
+  test the change immediately since WezTerm reads that path directly.
+- **Source file** — run `chezmoi edit ~/.config/wezterm/wezterm.lua`, which
+  opens the corresponding file in `~/.local/share/chezmoi/dot_config/
+  wezterm/wezterm.lua` in your `$EDITOR`. Skips step 2 below.
+
+**2. Pull a live edit back into the source state** (only needed if you
+edited the live file directly):
+```bash
+chezmoi re-add ~/.config/wezterm/wezterm.lua
+```
+This copies your live edit into `~/.local/share/chezmoi/dot_config/wezterm/
+wezterm.lua`, overwriting what was there. Safe for plain files like this one
+(no `.tmpl` suffix, no template logic) — for a templated file, `re-add`
+captures the machine's already-*rendered* output rather than the template
+source, so check `chezmoi diff` first before trusting it there.
+
+**3. Sanity check before committing:**
+```bash
+chezmoi diff
+```
+Should show no pending diff now — source and target match.
+
+**4. Commit and push from the source repo:**
+```bash
+chezmoi cd          # drops you into ~/.local/share/chezmoi
+git add -A
+git commit -m "tweaked wezterm font size"
+git push
+exit                 # back to your normal shell
+```
+
+**5. On every other machine, pull and apply in one shot:**
+```bash
+chezmoi update
+```
+This runs `git pull` inside the source repo and then `chezmoi apply`
+immediately, so the change lands right away. To preview first: `chezmoi
+update -n` (dry run), then `chezmoi update` for real.
+
+So the full cycle is: edit → `re-add` (only if you edited the live file) →
+commit/push from the source repo → `chezmoi update` everywhere else.

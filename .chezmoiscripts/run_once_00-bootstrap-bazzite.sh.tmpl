@@ -7,6 +7,10 @@
 {{- if ne .machineClass "bazzite" }}
 exit 0
 {{- end }}
+{{- if eq .chezmoi.os "windows" }}
+echo "chezmoi.os=windows: skipping Distrobox bootstrap (unsupported on native Windows)"
+exit 0
+{{- end }}
 
 set -euo pipefail
 
@@ -32,9 +36,10 @@ distrobox enter "${CONTAINER_NAME}" -- bash -c '
   devbox global install
   RC_FILE="$HOME/.bashrc"
   touch "$RC_FILE"
-  # devbox shellenv must load before starship init (starship binary comes from devbox).
+  # devbox shellenv must load first - starship and fnm are themselves devbox packages.
   grep -qF "eval \"\$(devbox global shellenv)\"" "$RC_FILE" || printf "\n# added by chezmoi\neval \"\$(devbox global shellenv)\"\n" >> "$RC_FILE"
   grep -qF "eval \"\$(starship init bash)\"" "$RC_FILE" || printf "\n# added by chezmoi\neval \"\$(starship init bash)\"\n" >> "$RC_FILE"
+  grep -qF "eval \"\$(fnm env --use-on-cd)\"" "$RC_FILE" || printf "\n# added by chezmoi\neval \"\$(fnm env --use-on-cd)\"\n" >> "$RC_FILE"
 '
 
 echo "devbox is ready inside the '${CONTAINER_NAME}' container."
