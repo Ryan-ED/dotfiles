@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+{{- /* Only runs for machineClass=bazzite. Bazzite is an atomic/ostree image, and Nix's
+   installer (which devbox pulls in) is known to be fragile on ostree hosts - it wants to
+   write /nix and manage /etc/{bashrc,zshrc,synthetic.conf} in ways that fight rpm-ostree.
+   So instead of touching the host at all, devbox+Nix live inside a Fedora Distrobox
+   container named "devbox", entered on demand with `distrobox enter devbox`. */ -}}
+{{- if ne .machineClass "bazzite" }}
+exit 0
+{{- end }}
+
+set -euo pipefail
+
+CONTAINER_NAME="devbox"
+
+if ! command -v distrobox >/dev/null 2>&1; then
+  echo "distrobox not found on host. Install it first (Bazzite ships it by default;" >&2
+  echo "otherwise: https://distrobox.it/#installation) and re-run chezmoi apply." >&2
+  exit 1
+fi
+
+if ! distrobox list --no-color 2>/dev/null | grep -q "${CONTAINER_NAME}"; then
+  echo "Creating Distrobox container '${CONTAINER_NAME}' (Fedora)..."
+  distrobox create --name "${CONTAINER_NAME}" --image fedora:latest --yes
+fi
+
+echo "Bootstrapping devbox+Nix inside '${CONTAINER_NAME}'..."
+distrobox enter "${CONTAINER_NAME}" -- bash -c '
+  set -euo pipefail
+  if ! command -v devbox >/dev/null 2>&1; then
+    curl -fsSL https://get.jetify.com/devbox | bash -f
+  fi
+  devbox global install
+  SHELLENV_LINE="eval \"\$(devbox global shellenv)\""
+  RC_FILE="$HOME/.bashrc"
+  touch "$RC_FILE"
+  grep -qF "$SHELLENV_LINE" "$RC_FILE" || printf "\n# devbox global shellenv (added by chezmoi)\n%s\n" "$SHELLENV_LINE" >> "$RC_FILE"
+'
+
+echo "devbox is ready inside the '${CONTAINER_NAME}' container."
+echo "Enter it with: distrobox enter ${CONTAINER_NAME}"
+echo "To expose a specific binary on the host PATH: distrobox-export --bin /path/in/container/to/bin"

@@ -1,0 +1,14 @@
+{
+  "packages": [
+    "neovim@latest",
+    "git@latest",
+    "lazygit@latest",
+    "ripgrep@latest",
+    "fd@latest",
+    "fzf@latest",
+    "tree-sitter@latest",
+    "gcc@latest",
+    "curl@latest",
+    "nerd-fonts.jetbrains-mono@latest"
+  ]
+}

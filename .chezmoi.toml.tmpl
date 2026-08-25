@@ -1,0 +1,13 @@
+{{- $machineClass := promptStringOnce . "machineClass" "Machine class (standard/bazzite/wsl)" "standard" -}}
+{{- /*
+  machineClass drives which run_once_00-bootstrap-*.sh.tmpl script actually does work:
+    standard - a normal Linux/macOS box, devbox+Nix installed directly on the host
+    wsl      - WSL Ubuntu; behaves like "standard" for bootstrapping, but wezterm.lua
+               uses .chezmoi.os / target_triple (not machineClass) to decide domain config
+    bazzite  - atomic/immutable (ostree) host; Nix must not touch the host, so devbox
+               is installed inside a Distrobox container instead
+  The answer is cached in the generated ~/.config/chezmoi/chezmoi.toml on first run
+  (promptStringOnce), so re-running `chezmoi apply` on the same machine never re-prompts.
+*/ -}}
+[data]
+    machineClass = {{ $machineClass | quote }}

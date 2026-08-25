@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+{{- /* Skipped entirely on Bazzite: Nix has known install issues on ostree/atomic hosts,
+   so that machine class gets its devbox+Nix inside a Distrobox container instead
+   (see run_once_00-bootstrap-bazzite.sh.tmpl). "standard" and "wsl" both bootstrap
+   directly on the host here. */ -}}
+{{- if eq .machineClass "bazzite" }}
+echo "machineClass=bazzite: skipping host bootstrap, see bootstrap-bazzite script"
+exit 0
+{{- end }}
+
+set -euo pipefail
+
+if ! command -v devbox >/dev/null 2>&1; then
+  echo "Installing devbox (this also bootstraps Nix)..."
+  curl -fsSL https://get.jetify.com/devbox | bash
+fi
+
+echo "Installing global devbox packages..."
+devbox global install
+
+SHELLENV_LINE='eval "$(devbox global shellenv)"'
+
+add_shellenv() {
+  local rc_file="$1"
+  [ -f "$rc_file" ] || touch "$rc_file"
+  if ! grep -qF "$SHELLENV_LINE" "$rc_file"; then
+    printf '\n# devbox global shellenv (added by chezmoi)\n%s\n' "$SHELLENV_LINE" >> "$rc_file"
+    echo "Added devbox shellenv to $rc_file"
+  fi
+}
+
+add_shellenv "$HOME/.bashrc"
+if [ -n "${ZSH_VERSION:-}" ] || command -v zsh >/dev/null 2>&1; then
+  add_shellenv "$HOME/.zshrc"
+fi
+
+echo "devbox bootstrap complete. Open a new shell (or 'exec $SHELL') to pick up global packages."
