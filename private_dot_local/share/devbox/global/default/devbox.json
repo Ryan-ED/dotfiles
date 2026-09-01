@@ -12,6 +12,8 @@
     "nerd-fonts.jetbrains-mono@latest",
     "starship@latest",
     "fnm@latest",
-    "pnpm@latest"
+    "pnpm@latest",
+    "zsh-autosuggestions@latest",
+    "zsh-syntax-highlighting@latest"
   ]
 }

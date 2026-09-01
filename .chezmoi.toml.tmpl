@@ -9,5 +9,14 @@
   The answer is cached in the generated ~/.config/chezmoi/chezmoi.toml on first run
   (promptStringOnce), so re-running `chezmoi apply` on the same machine never re-prompts.
 */ -}}
+{{- $gitName := promptStringOnce . "gitName" "Git user.name" -}}
+{{- $gitEmail := promptStringOnce . "gitEmail" "Git user.email" -}}
+{{- /*
+  gitName/gitEmail feed dot_gitconfig.tmpl. Prompted (not hardcoded) so the actual
+  values are cached only in this machine's local ~/.config/chezmoi/chezmoi.toml -
+  never committed to this (public) repo's git history.
+*/ -}}
 [data]
     machineClass = {{ $machineClass | quote }}
+    gitName = {{ $gitName | quote }}
+    gitEmail = {{ $gitEmail | quote }}

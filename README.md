@@ -16,13 +16,21 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
 ## How it fits together
 
 1. **`.chezmoi.toml.tmpl`** prompts once (via `promptStringOnce`) for `machineClass`
-   (`standard` / `bazzite` / `wsl`) and caches the answer in the generated
-   `~/.config/chezmoi/chezmoi.toml`. You're only asked on first `chezmoi init`
-   per machine; later `chezmoi apply` runs reuse it. To change it later, edit
-   `machineClass` directly in `~/.config/chezmoi/chezmoi.toml` (or delete the
-   file and re-init).
+   (`standard` / `bazzite` / `wsl`), plus `gitName` and `gitEmail`, and caches
+   the answers in the generated `~/.config/chezmoi/chezmoi.toml`. You're only
+   asked on first `chezmoi init` per machine; later `chezmoi apply` runs reuse
+   them. To change any of these later, edit the value directly in
+   `~/.config/chezmoi/chezmoi.toml` (or delete the file and re-init).
+   `gitName`/`gitEmail` are prompted rather than hardcoded specifically so the
+   actual values only ever live in that per-machine, uncommitted config file —
+   never in this (public) repo's git history.
 
-2. **`.chezmoiscripts/run_once_00-bootstrap-standard.sh.tmpl`** runs on
+2. **`dot_gitconfig.tmpl`** → `~/.gitconfig`, templated from `gitName`/
+   `gitEmail` above, so a fresh `git commit` on a new machine never hits git's
+   "Please tell me who you are" error. Also sets `init.defaultBranch = main`
+   directly (not prompted — same value everywhere, nothing personal about it).
+
+3. **`.chezmoiscripts/run_once_00-bootstrap-standard.sh.tmpl`** runs on
    `standard` and `wsl` machines (it no-ops and exits immediately when
    `machineClass == bazzite`, or when `.chezmoi.os == "windows"` — devbox/Nix
    aren't supported on native Windows at all, so this only ever does real
@@ -35,9 +43,16 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
      bash/zsh)"`, and `eval "$(fnm env --use-on-cd)"` to `~/.bashrc` (and
      `~/.zshrc` if zsh is present), idempotently — shellenv first, since
      `starship` and `fnm` are themselves devbox packages and need to already
-     be on `PATH` before their own init commands can run.
+     be on `PATH` before their own init commands can run;
+   - on `.zshrc` only (these are zsh-specific, `.bashrc` never gets them),
+     also `source`s `zsh-autosuggestions.zsh` and `zsh-syntax-highlighting.zsh`
+     straight out of devbox's global profile
+     (`~/.local/share/devbox/global/default/.devbox/nix/profile/default/share/...`).
+     `zsh-syntax-highlighting` is appended last on purpose — its own docs
+     require it to be the final thing sourced in `.zshrc`, since anything
+     sourced after it can silently break the highlighting.
 
-3. **`.chezmoiscripts/run_once_00-bootstrap-bazzite.sh.tmpl`** runs only when
+4. **`.chezmoiscripts/run_once_00-bootstrap-bazzite.sh.tmpl`** runs only when
    `machineClass == bazzite` (no-ops otherwise). Nix's installer is known to
    fight ostree/atomic hosts (it wants to own `/nix` and rewrite shell rc
    files in `/etc`, which rpm-ostree-based systems don't like). So instead:
@@ -56,16 +71,17 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    in `chezmoi apply -n` output; chezmoi runs whichever one's `if` doesn't
    short-circuit, driven by `machineClass`, not by execution order.
 
-4. **`private_dot_local/share/devbox/global/default/devbox.json`** is the
+5. **`private_dot_local/share/devbox/global/default/devbox.json`** is the
    single source of truth for global devbox packages, applied to
    `~/.local/share/devbox/global/default/devbox.json` (kept `private_` /
    0600 since devbox itself defaults to writing it that way). Current
    packages: `neovim`, `git`, `lazygit`, `ripgrep`, `fd`, `fzf`,
    `tree-sitter`, `gcc`, `curl`, `nerd-fonts.jetbrains-mono`, `starship`,
-   `fnm`, `pnpm`. Add more by editing this file and running `chezmoi apply`
-   — devbox reconciles installed packages against it. `starship` ships with
-   sensible defaults, so there's no `starship.toml` here yet — add one later
-   if you want a themed prompt.
+   `fnm`, `pnpm`, `zsh-autosuggestions`, `zsh-syntax-highlighting`. Add more
+   by editing this file and running `chezmoi apply` — devbox reconciles
+   installed packages against it. `starship` ships with sensible defaults, so
+   there's no `starship.toml` here yet — add one later if you want a themed
+   prompt.
 
    **`fnm`** (Fast Node Manager) covers per-project Node versions the way
    [nvm](https://github.com/nvm-sh/nvm) would, reading the same `.nvmrc`
@@ -97,6 +113,17 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    you start installing CLI tools globally via pnpm — add them to the
    bootstrap script's rc-file lines later if that comes up.
 
+   **`zsh-autosuggestions`** and **`zsh-syntax-highlighting`** were chosen
+   over installing [Oh My Zsh](https://ohmyz.sh/) for the two specific
+   features it's usually reached for. Oh My Zsh itself was skipped for the
+   same reason `nvm` was: it self-installs via a curl-piped script that
+   clones its own framework into `~/.oh-my-zsh` and rewrites `.zshrc`
+   directly, outside Nix/devbox's reproducible model, and it noticeably
+   slows shell startup once plugins are added. Both of these are real Nix
+   packages instead, `source`d directly from devbox's global profile in
+   `.zshrc` (see item 3) — same functionality, no framework, no `sudo`, no
+   self-modifying installer.
+
    This list covers every item on
    [LazyVim's requirements](https://www.lazyvim.org/#-requirements): Neovim
    + Git for the editor itself, lazygit, ripgrep/fd/fzf for fzf-lua,
@@ -112,7 +139,7 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    (e.g. `winget install --id DEVCOM.JetBrainsMonoNerdFont`) for WezTerm to
    actually find the glyphs `wezterm.lua` asks for.
 
-5. **`dot_config/wezterm/wezterm.lua`** sets
+6. **`dot_config/wezterm/wezterm.lua`** sets
    `config.default_domain = "WSL:Ubuntu"` only when
    `wezterm.target_triple` contains `"windows"` (i.e. WezTerm itself is
    running natively on Windows, launching straight into WSL). On Linux
@@ -130,9 +157,9 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    (for `wezterm.lua` and anything else under `dot_config/`) — see "WSL +
    native Windows" under Usage. The native-Windows run answers the same
    `machineClass=wsl` prompt but the bootstrap script no-ops there by design
-   (see item 2's OS guard), so it only ever deploys plain files.
+   (see item 3's OS guard), so it only ever deploys plain files.
 
-6. **`dot_config/nvim/`** — a plain [LazyVim starter](https://github.com/LazyVim/starter)
+7. **`dot_config/nvim/`** — a plain [LazyVim starter](https://github.com/LazyVim/starter)
    config (no pre-existing personal config was found on this machine, so it
    was scaffolded fresh from upstream: `init.lua`, `lua/config/*`,
    `lua/plugins/example.lua`, `stylua.toml`, plus `.gitignore`/`.neoconf.json`
@@ -141,7 +168,7 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    `lua/plugins/`. Requires the `neovim` package from `devbox.json` above (or
    any Neovim ≥ 0.9 on `PATH`).
 
-7. **`dot_config/hypr/`, `dot_config/i3/`, `dot_config/waybar/`** — Hyprland,
+8. **`dot_config/hypr/`, `dot_config/i3/`, `dot_config/waybar/`** — Hyprland,
    i3, and Waybar configs pulled over verbatim from
    [Ryan-ED/dotfiles](https://github.com/Ryan-ED/dotfiles) (previously a
    Stow-style `<package>/.config/...` layout; flattened into chezmoi's
@@ -219,7 +246,7 @@ Two things are deliberately **not** part of any bootstrap script, kept
 manual on purpose rather than automated:
 
 - **WezTerm itself.** Only its config (`dot_config/wezterm/wezterm.lua`,
-  item 5 above) is managed here — the application is installed separately,
+  item 6 above) is managed here — the application is installed separately,
   per OS: `winget install wez.wezterm` on Windows, your distro's package
   manager or `flatpak install flathub org.wezfurlong.wezterm` on Linux
   (Flatpak specifically on Bazzite — see the Bazzite caveat above for why
