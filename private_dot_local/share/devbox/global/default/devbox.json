@@ -11,6 +11,7 @@
     "curl@latest",
     "nerd-fonts.jetbrains-mono@latest",
     "starship@latest",
-    "fnm@latest"
+    "fnm@latest",
+    "pnpm@latest"
   ]
 }

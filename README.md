@@ -62,10 +62,10 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    0600 since devbox itself defaults to writing it that way). Current
    packages: `neovim`, `git`, `lazygit`, `ripgrep`, `fd`, `fzf`,
    `tree-sitter`, `gcc`, `curl`, `nerd-fonts.jetbrains-mono`, `starship`,
-   `fnm`. Add more by editing this file and running `chezmoi apply` — devbox
-   reconciles installed packages against it. `starship` ships with sensible
-   defaults, so there's no `starship.toml` here yet — add one later if you
-   want a themed prompt.
+   `fnm`, `pnpm`. Add more by editing this file and running `chezmoi apply`
+   — devbox reconciles installed packages against it. `starship` ships with
+   sensible defaults, so there's no `starship.toml` here yet — add one later
+   if you want a themed prompt.
 
    **`fnm`** (Fast Node Manager) covers per-project Node versions the way
    [nvm](https://github.com/nvm-sh/nvm) would, reading the same `.nvmrc`
@@ -80,6 +80,22 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    but only helps in repos that adopt devbox themselves; `fnm` was chosen
    here so version-switching still works in any project with a plain
    `.nvmrc`, regardless of whether it uses devbox.
+
+   **`pnpm`** is the package manager (npm/yarn alternative — shared
+   content-addressable store, strict dependency resolution), a separate
+   concern from `fnm` (which Node *runtime* you're on). They're kept side
+   by side deliberately rather than dropping `fnm` in favor of pnpm's own
+   `pnpm env use`: pnpm's version switching is explicit/manual and only
+   applies within `pnpm` commands, whereas `fnm`'s shell hook rewrites
+   `node` on `PATH` automatically for *any* invocation (`node script.js`,
+   other tools that shell out to it) the moment you `cd` into a project —
+   keeping both means that still works even for commands that never go
+   through `pnpm`. No shell-hook needed for `pnpm` itself — it works
+   straight off `PATH` once devbox's shellenv is sourced. One thing it
+   doesn't cover: `PNPM_HOME` + a `PATH` entry for *global* installs
+   (`pnpm add -g <tool>`) aren't set up here, since they're only needed if
+   you start installing CLI tools globally via pnpm — add them to the
+   bootstrap script's rc-file lines later if that comes up.
 
    This list covers every item on
    [LazyVim's requirements](https://www.lazyvim.org/#-requirements): Neovim
@@ -153,7 +169,7 @@ sh -c "$(curl -fsLS get.chezmoi.io)"
 With chezmoi installed:
 
 ```bash
-chezmoi init --apply <git-remote-url>
+chezmoi init --apply https://github.com/Ryan-ED/dotfiles # or your <git-remote-url>
 ```
 
 You'll be prompted once for `machineClass`. After that, `chezmoi apply` is
@@ -300,4 +316,3 @@ update -n` (dry run), then `chezmoi update` for real.
 
 So the full cycle is: edit → `re-add` (only if you edited the live file) →
 commit/push from the source repo → `chezmoi update` everywhere else.
- 
