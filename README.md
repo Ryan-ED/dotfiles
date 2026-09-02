@@ -249,8 +249,19 @@ first-boot-to-working-machine walkthrough; skip the parts you already know.
   the initial clone. Install both via your OS's package manager, or chezmoi
   via its own installer if your distro doesn't package it:
   ```bash
-  sh -c "$(curl -fsLS get.chezmoi.io)"
+  sh -c "$(curl -fsLS get.chezmoi.io)" -- -b ~/.local/bin
   ```
+  **Gotcha:** without the `-b ~/.local/bin` part, the installer defaults to
+  a relative `bin/chezmoi` under wherever you ran the command from (so
+  `~/bin/chezmoi` from a fresh login) — a directory that's very likely not
+  on `PATH` yet, especially in zsh, which (unlike bash) never sources
+  `.profile` at all. You'll get `command not found: chezmoi` immediately
+  after a successful install. `-b ~/.local/bin` targets a directory that's
+  reliably already on `PATH` on Ubuntu/WSL and most distros even before any
+  rc file exists. If you already hit this, either move the binary
+  (`mkdir -p ~/.local/bin && mv ~/bin/chezmoi ~/.local/bin/`) or just call it
+  by its full path once (`~/bin/chezmoi --version`) to confirm the install
+  itself worked.
 - **Your SSH key needs to already work against GitHub**, since the clone
   below goes over SSH:
   ```bash
