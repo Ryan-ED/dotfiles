@@ -1,0 +1,97 @@
+/* ~/.config/waybar/style.css
+ *
+ * Minimal dark theme to match hyprland.conf. Only two colors matter if you
+ * want to reskin this: @bg and @accent.
+ */
+
+* {
+    font-family: "JetBrainsMono Nerd Font", sans-serif;
+    font-size: 13px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: transparent;
+}
+
+#waybar {
+    background-color: rgba(30, 30, 46, 0.85);
+    color: #cdd6f4;
+    border-radius: 12px;
+    margin: 0;
+}
+
+#custom-launcher,
+#workspaces,
+#window,
+#clock,
+#pulseaudio,
+#network,
+#cpu,
+#memory,
+#battery,
+#tray {
+    padding: 0 10px;
+    margin: 4px 2px;
+    border-radius: 8px;
+    background-color: rgba(49, 50, 68, 0.6);
+}
+
+#custom-launcher {
+    color: #89b4fa;
+    font-size: 16px;
+    padding: 0 14px;
+}
+#custom-launcher:hover {
+    background-color: rgba(137, 180, 250, 0.25);
+}
+
+#workspaces button {
+    padding: 0 6px;
+    color: #6c7086;
+    background: transparent;
+}
+#workspaces button.active {
+    color: #89b4fa;
+}
+#workspaces button.urgent {
+    color: #f38ba8;
+}
+#workspaces button:hover {
+    color: #cdd6f4;
+    background-color: rgba(137, 180, 250, 0.15);
+}
+
+#window {
+    color: #a6adc8;
+    font-style: italic;
+}
+
+#clock {
+    font-weight: bold;
+    color: #cdd6f4;
+}
+
+#battery.warning {
+    color: #f9e2af;
+}
+#battery.critical {
+    color: #f38ba8;
+}
+#battery.charging {
+    color: #a6e3a1;
+}
+
+#network.disconnected {
+    color: #f38ba8;
+}
+
+#tray {
+    padding: 0 8px;
+}
+#tray > .passive {
+    opacity: 0.6;
+}
+#tray > .needs-attention {
+    background-color: #f38ba8;
+}
