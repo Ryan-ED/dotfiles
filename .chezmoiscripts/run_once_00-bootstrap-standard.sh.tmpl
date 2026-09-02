@@ -64,21 +64,9 @@ append_once() {
 
 # devbox shellenv must load first - starship and fnm are themselves devbox packages
 # and need to already be on PATH before their own init/hook commands can run.
+# (.zshrc doesn't need any of this - it's fully chezmoi-managed, see dot_zshrc.tmpl.)
 append_once "$HOME/.bashrc" 'eval "$(devbox global shellenv)"'
 append_once "$HOME/.bashrc" 'eval "$(starship init bash)"'
 append_once "$HOME/.bashrc" 'eval "$(fnm env --use-on-cd)"'
-
-if [ -n "${ZSH_VERSION:-}" ] || command -v zsh >/dev/null 2>&1; then
-  append_once "$HOME/.zshrc" 'eval "$(devbox global shellenv)"'
-  append_once "$HOME/.zshrc" 'eval "$(starship init zsh)"'
-  append_once "$HOME/.zshrc" 'eval "$(fnm env --use-on-cd)"'
-
-  # devbox's stable global-profile path (same one `which starship` resolves through).
-  DEVBOX_PROFILE="$HOME/.local/share/devbox/global/default/.devbox/nix/profile/default"
-  append_once "$HOME/.zshrc" "source $DEVBOX_PROFILE/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
-  # zsh-syntax-highlighting must be the LAST thing sourced in .zshrc (its own
-  # requirement - anything sourced after it can silently break the highlighting).
-  append_once "$HOME/.zshrc" "source $DEVBOX_PROFILE/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-fi
 
 echo "devbox bootstrap complete. Open a new shell (or 'exec $SHELL') to pick up global packages."

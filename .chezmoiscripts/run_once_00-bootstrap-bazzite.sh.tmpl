@@ -36,10 +36,10 @@ distrobox enter "${CONTAINER_NAME}" -- bash -c '
   devbox global install
   RC_FILE="$HOME/.bashrc"
   touch "$RC_FILE"
-  # devbox shellenv must load first - starship and fnm are themselves devbox packages.
-  grep -qF "eval \"\$(devbox global shellenv)\"" "$RC_FILE" || printf "\n# added by chezmoi\neval \"\$(devbox global shellenv)\"\n" >> "$RC_FILE"
-  grep -qF "eval \"\$(starship init bash)\"" "$RC_FILE" || printf "\n# added by chezmoi\neval \"\$(starship init bash)\"\n" >> "$RC_FILE"
-  grep -qF "eval \"\$(fnm env --use-on-cd)\"" "$RC_FILE" || printf "\n# added by chezmoi\neval \"\$(fnm env --use-on-cd)\"\n" >> "$RC_FILE"
+  # devbox/starship/fnm only exist inside this container - $HOME (and thus .bashrc) is
+  # shared with the bare Bazzite host via Distrobox, so guard on /run/.containerenv to
+  # stop a plain host shell from trying to eval commands that only exist in here.
+  grep -qF "added by chezmoi (bazzite devbox)" "$RC_FILE" || printf "\n# added by chezmoi (bazzite devbox)\nif [ -f /run/.containerenv ]; then\n  eval \"\$(devbox global shellenv)\"\n  eval \"\$(starship init bash)\"\n  eval \"\$(fnm env --use-on-cd)\"\nfi\n" >> "$RC_FILE"
 '
 
 echo "devbox is ready inside the '${CONTAINER_NAME}' container."

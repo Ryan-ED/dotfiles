@@ -9,3 +9,7 @@
 .config/i3
 .config/waybar
 {{- end }}
+{{- /* .zshrc is meaningless on native Windows (no zsh there at all) but valid on macOS. */ -}}
+{{- if eq .chezmoi.os "windows" }}
+.zshrc
+{{- end }}

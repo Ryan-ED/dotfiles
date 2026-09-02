@@ -48,17 +48,11 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
      (anything not sourcing `devbox global shellenv`) can't see fonts like
      `nerd-fonts.jetbrains-mono` at all;
    - appends `eval "$(devbox global shellenv)"`, `eval "$(starship init
-     bash/zsh)"`, and `eval "$(fnm env --use-on-cd)"` to `~/.bashrc` (and
-     `~/.zshrc` if zsh is present), idempotently — shellenv first, since
-     `starship` and `fnm` are themselves devbox packages and need to already
-     be on `PATH` before their own init commands can run;
-   - on `.zshrc` only (these are zsh-specific, `.bashrc` never gets them),
-     also `source`s `zsh-autosuggestions.zsh` and `zsh-syntax-highlighting.zsh`
-     straight out of devbox's global profile
-     (`~/.local/share/devbox/global/default/.devbox/nix/profile/default/share/...`).
-     `zsh-syntax-highlighting` is appended last on purpose — its own docs
-     require it to be the final thing sourced in `.zshrc`, since anything
-     sourced after it can silently break the highlighting.
+     bash)"`, and `eval "$(fnm env --use-on-cd)"` to `~/.bashrc`,
+     idempotently — shellenv first, since `starship` and `fnm` are
+     themselves devbox packages and need to already be on `PATH` before
+     their own init commands can run. `.zshrc` needs none of this appended
+     to it — it's a fully chezmoi-managed file in its own right, see item 5.
 
 4. **`.chezmoiscripts/run_once_00-bootstrap-bazzite.sh.tmpl`** runs only when
    `machineClass == bazzite` (no-ops otherwise). Nix's installer is known to
@@ -69,7 +63,13 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    - installs devbox/Nix *inside* that container and runs
      `devbox global install` there, leaving the host untouched, appending the
      same `devbox global shellenv` + `starship init bash` + `fnm env
-     --use-on-cd` lines to the container's own `~/.bashrc`;
+     --use-on-cd` lines to the container's own `~/.bashrc` — wrapped in
+     `if [ -f /run/.containerenv ]; then ... fi`. That guard matters because
+     Distrobox shares `$HOME` between host and container, so this is
+     literally the *same* `~/.bashrc` the bare Bazzite host uses too; without
+     it, every plain host terminal (never entering the container at all)
+     would print "command not found" for devbox/starship/fnm on every
+     startup, since those only exist inside the container's own filesystem;
    - then, back on the actual **host** (not inside the container): registers
      that same devbox font directory in the host's own
      `~/.config/fontconfig/fonts.conf` and runs `fc-cache -f`. Distrobox
@@ -86,7 +86,42 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    in `chezmoi apply -n` output; chezmoi runs whichever one's `if` doesn't
    short-circuit, driven by `machineClass`, not by execution order.
 
-5. **`private_dot_local/share/devbox/global/default/devbox.json`** is the
+5. **`dot_zshrc.tmpl`** → `~/.zshrc`, fully chezmoi-managed rather than
+   appended to by a bootstrap script (unlike `.bashrc`) — a fresh zsh install
+   has no meaningful default `.zshrc` to preserve, and every line that would
+   go here was already something our own scripts wrote anyway, so there's no
+   overwrite risk in owning the whole file. Two parts:
+   - **Unconditional, at the top:** `HISTFILE`/`HISTSIZE`/`SAVEHIST`, a few
+     sane `HIST_*`/`SHARE_HISTORY` options, and `compinit` for completion.
+     These exist here specifically because zsh only ever runs its
+     interactive `zsh-newuser-install` wizard (which would otherwise set up
+     exactly this) when *none* of `~/.zshenv`/`~/.zprofile`/`~/.zshrc`/
+     `~/.zlogin` exist — since chezmoi always deploys this file first, that
+     wizard never fires on any machine bootstrapped by this repo, so its
+     usual defaults have to be set explicitly instead. Plain zsh options,
+     no devbox dependency, so they apply the same regardless of
+     `machineClass`/container status.
+   - **`devbox global shellenv`, `starship init zsh`, `fnm env
+     --use-on-cd`, and the two zsh plugins from `devbox.json`**
+     (`zsh-syntax-highlighting` last, per its own requirement to be the
+     final thing sourced). On `machineClass == bazzite` only *this* part is
+     wrapped in `if [ -f /run/.containerenv ]; then ... fi`, for the same
+     reason as item 4's `.bashrc` guard — Distrobox shares `$HOME`, so this
+     file is sourced by both the container's shell and the bare host's, but
+     devbox only exists inside the container. `standard`/`wsl` never
+     involve a container, so no guard is emitted there at all.
+
+   Excluded on native Windows via `.chezmoiignore.tmpl` (meaningless there;
+   kept for macOS, which does use zsh).
+
+   One side effect worth knowing: since this file deploys unconditionally
+   through chezmoi's normal file management rather than a `command -v zsh`
+   runtime check in a `run_once_*` script, the old "install zsh *before*
+   `chezmoi init`" ordering requirement doesn't apply to `.zshrc` at all —
+   it's always there, correctly populated, whenever zsh eventually gets
+   installed and first reads it, regardless of when that happens.
+
+6. **`private_dot_local/share/devbox/global/default/devbox.json`** is the
    single source of truth for global devbox packages, applied to
    `~/.local/share/devbox/global/default/devbox.json` (kept `private_` /
    0600 since devbox itself defaults to writing it that way). Current
@@ -136,7 +171,7 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    directly, outside Nix/devbox's reproducible model, and it noticeably
    slows shell startup once plugins are added. Both of these are real Nix
    packages instead, `source`d directly from devbox's global profile in
-   `.zshrc` (see item 3) — same functionality, no framework, no `sudo`, no
+   `.zshrc` (see item 5) — same functionality, no framework, no `sudo`, no
    self-modifying installer.
 
    This list covers every item on
@@ -154,7 +189,7 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    (e.g. `winget install --id DEVCOM.JetBrainsMonoNerdFont`) for WezTerm to
    actually find the glyphs `wezterm.lua` asks for.
 
-6. **`dot_config/wezterm/wezterm.lua`** sets
+7. **`dot_config/wezterm/wezterm.lua`** sets
    `config.default_domain = "WSL:Ubuntu"` only when
    `wezterm.target_triple` contains `"windows"` (i.e. WezTerm itself is
    running natively on Windows, launching straight into WSL). On Linux
@@ -174,7 +209,7 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    `machineClass=wsl` prompt but the bootstrap script no-ops there by design
    (see item 3's OS guard), so it only ever deploys plain files.
 
-7. **`dot_config/nvim/`** — a plain [LazyVim starter](https://github.com/LazyVim/starter)
+8. **`dot_config/nvim/`** — a plain [LazyVim starter](https://github.com/LazyVim/starter)
    config (no pre-existing personal config was found on this machine, so it
    was scaffolded fresh from upstream: `init.lua`, `lua/config/*`,
    `lua/plugins/example.lua`, `stylua.toml`, plus `.gitignore`/`.neoconf.json`
@@ -183,7 +218,7 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    `lua/plugins/`. Requires the `neovim` package from `devbox.json` above (or
    any Neovim ≥ 0.9 on `PATH`).
 
-8. **`dot_config/hypr/`, `dot_config/i3/`, `dot_config/waybar/`** — Hyprland,
+9. **`dot_config/hypr/`, `dot_config/i3/`, `dot_config/waybar/`** — Hyprland,
    i3, and Waybar configs pulled over verbatim from
    [Ryan-ED/dotfiles](https://github.com/Ryan-ED/dotfiles) (previously a
    Stow-style `<package>/.config/...` layout; flattened into chezmoi's
@@ -225,17 +260,17 @@ first-boot-to-working-machine walkthrough; skip the parts you already know.
   initially, but every later `git push`/`pull` from `chezmoi cd` then fails
   on missing HTTPS credentials — hit this once already on this exact repo.
   Always use the SSH form shown below.
-- **Decide on zsh now, not later, if you want it.** The bootstrap script
-  checks whether zsh is installed exactly **once** — it's a `run_once_*`
-  script, tracked by content hash, never re-checked after that. If you want
-  zsh, install and switch to it *before* `chezmoi init`:
+- **Want zsh? Install it whenever — before or after `chezmoi init`, order
+  doesn't matter.** `.zshrc` is a fully chezmoi-managed file (not something
+  a `run_once_*` script conditionally appends to), so it's always correctly
+  populated the moment zsh actually reads it, regardless of when you install
+  zsh relative to running chezmoi:
   ```bash
   sudo apt install zsh   # or pacman/dnf, depending on distro
   chsh -s $(which zsh)
   ```
-  Skip this if bash is fine for now — you can always switch later, it just
-  means manually copying three lines from `.bashrc` into `.zshrc` afterward
-  instead of getting them for free (see "Manual installs" below).
+  `chsh` itself is still a manual, one-time step either way — see "Manual
+  installs" below for why that's not automated.
 
 With that done, jump to whichever machine type this is.
 
@@ -313,7 +348,7 @@ GUI process that can't see anything deployed only into WSL's filesystem.
    answering `wsl` at the prompt. This does the real work — devbox, Nix,
    starship, fnm, pnpm, the nvim config, fontconfig.
 3. Same gotchas as Standard apply here too: new shell afterward, nvim
-   first-launch step, decide on zsh *before* this step if you want it.
+   first-launch step.
 
 **Natively on Windows:**
 
@@ -356,24 +391,24 @@ Two things are deliberately **not** part of any bootstrap script — see the
 walkthroughs above for exactly *when* to do each; this is the *why*:
 
 - **WezTerm itself.** Only its config (`dot_config/wezterm/wezterm.lua`,
-  item 6 above) is managed here. It was left out of `devbox.json` because
+  item 7 above) is managed here. It was left out of `devbox.json` because
   it's a GUI app with real GPU/OpenGL rendering, and Nix-packaged GUI apps
   on non-NixOS Linux sometimes hit graphics-driver mismatches that OS-native
   packaging (or Flatpak, on Bazzite) avoids — not worth the risk for the one
   application you'd be using to fix things if it broke.
 
-- **Switching to zsh.** The bootstrap script writes identical `devbox
-  global shellenv` / `starship init` / `fnm env` lines to *both* `.bashrc`
-  and `.zshrc` so either shell works, but it never installs zsh or runs
-  `chsh` itself. Every script in this repo is deliberately unprivileged (no
-  `sudo` — one of the actual selling points of devbox/Nix); automating this
-  would mean the first `sudo` call in the whole setup, plus per-distro
-  package-manager branching, just to save one copy-pasted command. If you
-  installed zsh *after* chezmoi already bootstrapped that machine (rather
-  than before, per step 0 above), the script won't retroactively populate a
-  `.zshrc` that didn't exist yet at that time — copy the three `eval` lines
-  over from `.bashrc` manually (swap `starship init bash` for
-  `starship init zsh`).
+- **Switching to zsh.** `.bashrc` and `.zshrc` end up equivalent (same
+  `devbox global shellenv` / `starship init` / `fnm env` setup, plus the two
+  zsh plugins in `.zshrc`'s case), but nothing here installs zsh itself or
+  runs `chsh` to make it your login shell. Every script in this repo is
+  deliberately unprivileged (no `sudo` — one of the actual selling points of
+  devbox/Nix); automating this would mean the first `sudo` call in the whole
+  setup, plus per-distro package-manager branching, just to save one
+  copy-pasted command. Since `.zshrc` is a fully chezmoi-managed file (item
+  5 above), not something a `run_once_*` script appends to conditionally,
+  there's no ordering concern here anymore either — install zsh whenever you
+  like, before or after `chezmoi init`, and `.zshrc` is already correctly
+  populated the moment zsh actually reads it.
 
 ## Making changes and syncing them everywhere
 

@@ -1,0 +1,47 @@
+{{- /*
+  This file is fully chezmoi-managed (unlike .bashrc, which is only appended to by the
+  run_once bootstrap scripts) - a fresh zsh install has no meaningful default .zshrc to
+  preserve, and our own bootstrap scripts already own every line that would go here.
+
+  On machineClass=bazzite, Distrobox shares $HOME between the host and the "devbox"
+  container, so this exact file gets sourced in BOTH places - but devbox/Nix only exist
+  inside the container. The /run/.containerenv guard below (podman-based containers,
+  which Distrobox uses, always create this file) stops a plain host shell from trying to
+  eval commands that only exist inside the container. standard/wsl never involve a
+  container at all, so no guard is needed there - devbox always lives on the same host
+  this file is sourced on.
+
+  History/completion settings below exist because zsh only runs its interactive
+  zsh-newuser-install wizard when NONE of ~/.zshenv, ~/.zprofile, ~/.zshrc, ~/.zlogin
+  are present - since chezmoi always deploys this file first, that wizard (and its
+  usual HISTFILE/compinit setup) never fires on any machine bootstrapped by this repo.
+  Set the same things here instead, plain zsh options with no devbox dependency, so
+  they apply unconditionally regardless of machineClass/container status.
+*/ -}}
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=10000
+SAVEHIST=10000
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
+setopt SHARE_HISTORY
+setopt APPEND_HISTORY
+
+autoload -Uz compinit
+compinit
+
+{{- if eq .machineClass "bazzite" }}
+if [ -f /run/.containerenv ]; then
+{{- end }}
+eval "$(devbox global shellenv)"
+eval "$(starship init zsh)"
+eval "$(fnm env --use-on-cd)"
+
+DEVBOX_PROFILE="$HOME/.local/share/devbox/global/default/.devbox/nix/profile/default"
+source "$DEVBOX_PROFILE/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+
+# zsh-syntax-highlighting must be the LAST thing sourced in .zshrc (its own
+# requirement - anything sourced after it can silently break the highlighting).
+source "$DEVBOX_PROFILE/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+{{- if eq .machineClass "bazzite" }}
+fi
+{{- end }}
