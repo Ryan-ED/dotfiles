@@ -45,3 +45,30 @@ distrobox enter "${CONTAINER_NAME}" -- bash -c '
 echo "devbox is ready inside the '${CONTAINER_NAME}' container."
 echo "Enter it with: distrobox enter ${CONTAINER_NAME}"
 echo "To expose a specific binary on the host PATH: distrobox-export --bin /path/in/container/to/bin"
+
+{{- /* Distrobox shares $HOME between host and container, so devbox's Nix-installed fonts
+   (installed above, inside the container) already exist at this path on the host's own
+   disk too - but the HOST's fontconfig was never told to look there (that only happened,
+   if at all, inside the container's own shell config, which the host never sources). This
+   registers it on the actual host, where a Flatpak/native WezTerm install actually runs. */ -}}
+DEVBOX_FONTS_DIR="$HOME/.local/share/devbox/global/default/.devbox/nix/profile/default/share/fonts"
+FONTCONFIG_FILE="$HOME/.config/fontconfig/fonts.conf"
+mkdir -p "$(dirname "$FONTCONFIG_FILE")"
+if [ ! -f "$FONTCONFIG_FILE" ]; then
+  cat > "$FONTCONFIG_FILE" <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>$DEVBOX_FONTS_DIR</dir>
+</fontconfig>
+EOF
+  echo "Created $FONTCONFIG_FILE registering devbox's font directory (on host)"
+elif ! grep -qF "$DEVBOX_FONTS_DIR" "$FONTCONFIG_FILE"; then
+  sed -i "s#</fontconfig>#  <dir>$DEVBOX_FONTS_DIR</dir>\n</fontconfig>#" "$FONTCONFIG_FILE"
+  echo "Added devbox's font directory to existing $FONTCONFIG_FILE (on host)"
+fi
+if command -v fc-cache >/dev/null 2>&1; then
+  fc-cache -f >/dev/null 2>&1 || true
+else
+  echo "fc-cache not found on host - fonts registered but cache not rebuilt yet" >&2
+fi

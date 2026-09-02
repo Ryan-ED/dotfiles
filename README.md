@@ -8,7 +8,7 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
 
 | Machine           | machineClass | Notes                                                        |
 |-------------------|--------------|---------------------------------------------------------------|
-| Windows 11 laptop | `wsl`        | `chezmoi apply` run **inside WSL/Ubuntu** for devbox/tooling, **and separately on native Windows** for WezTerm's config — see "WSL + native Windows" below |
+| Windows 11 laptop | `wsl`        | `chezmoi apply` run **inside WSL/Ubuntu** for devbox/tooling, **and separately on native Windows** for WezTerm's config — see "First-time setup → WSL" below |
 | Arch Linux laptop | `standard`   | Throwaway/testing box                                         |
 | Bazzite laptop    | `bazzite`    | Atomic/ostree — devbox+Nix run in a Distrobox container        |
 | Fedora laptop     | `standard`   | Main daily driver                                              |
@@ -39,6 +39,14 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
      in Nix as a side effect of its own installer;
    - runs `devbox global install` to materialize the packages in
      `~/.local/share/devbox/global/default/devbox.json`;
+   - on Linux only (macOS uses Core Text, not fontconfig, for font lookup),
+     registers devbox's font directory
+     (`.devbox/nix/profile/default/share/fonts`) in
+     `~/.config/fontconfig/fonts.conf` and runs `fc-cache -f` — Nix doesn't
+     register its installed fonts with the host's fontconfig on non-NixOS
+     systems by default, so without this, apps outside devbox's own shell
+     (anything not sourcing `devbox global shellenv`) can't see fonts like
+     `nerd-fonts.jetbrains-mono` at all;
    - appends `eval "$(devbox global shellenv)"`, `eval "$(starship init
      bash/zsh)"`, and `eval "$(fnm env --use-on-cd)"` to `~/.bashrc` (and
      `~/.zshrc` if zsh is present), idempotently — shellenv first, since
@@ -61,7 +69,14 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    - installs devbox/Nix *inside* that container and runs
      `devbox global install` there, leaving the host untouched, appending the
      same `devbox global shellenv` + `starship init bash` + `fnm env
-     --use-on-cd` lines to the container's own `~/.bashrc`.
+     --use-on-cd` lines to the container's own `~/.bashrc`;
+   - then, back on the actual **host** (not inside the container): registers
+     that same devbox font directory in the host's own
+     `~/.config/fontconfig/fonts.conf` and runs `fc-cache -f`. Distrobox
+     shares `$HOME` between host and container, so the font files already
+     exist at that path on the host's disk — but the host's fontconfig was
+     never told to look there, and a Flatpak-installed WezTerm runs on the
+     host, never inside the container, so it'd otherwise never see them.
 
    Enter the container with `distrobox enter devbox`. To make an individual
    binary available on the host `PATH` without entering the container, use
@@ -154,8 +169,8 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    the Linux filesystem, a different path entirely). So on the `wsl` machine,
    you run `chezmoi init --apply <repo>` twice: once inside WSL (for
    devbox/nvim/starship), and once with chezmoi installed natively on Windows
-   (for `wezterm.lua` and anything else under `dot_config/`) — see "WSL +
-   native Windows" under Usage. The native-Windows run answers the same
+   (for `wezterm.lua` and anything else under `dot_config/`) — see
+   "First-time setup → WSL" below. The native-Windows run answers the same
    `machineClass=wsl` prompt but the bootstrap script no-ops there by design
    (see item 3's OS guard), so it only ever deploys plain files.
 
@@ -184,113 +199,181 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    machines regardless of which desktop environment is currently active
    there.
 
-## Usage
+## First-time setup
 
-On a new machine if chezmoi itself isn't available yet,
-install it via your OS package manager, or a one-off:
+Order matters more than it looks like it should here — several steps below
+only come out right if done in sequence. This is written as a literal
+first-boot-to-working-machine walkthrough; skip the parts you already know.
 
-```bash
-sh -c "$(curl -fsLS get.chezmoi.io)"
-```
+### 0. Before running chezmoi at all (every machine)
 
-With chezmoi installed:
+- **A system `git` and `chezmoi` must already be installed.** chezmoi's very
+  first clone of this repo has to happen with whatever git the OS already
+  provides — devbox's own (Nix-packaged) git only becomes available *after*
+  the bootstrap script that same clone triggers, so it can't be what does
+  the initial clone. Install both via your OS's package manager, or chezmoi
+  via its own installer if your distro doesn't package it:
+  ```bash
+  sh -c "$(curl -fsLS get.chezmoi.io)"
+  ```
+- **Your SSH key needs to already work against GitHub**, since the clone
+  below goes over SSH:
+  ```bash
+  ssh -T git@github.com
+  ```
+  **Gotcha:** using an `https://` URL instead of the SSH one clones fine
+  initially, but every later `git push`/`pull` from `chezmoi cd` then fails
+  on missing HTTPS credentials — hit this once already on this exact repo.
+  Always use the SSH form shown below.
+- **Decide on zsh now, not later, if you want it.** The bootstrap script
+  checks whether zsh is installed exactly **once** — it's a `run_once_*`
+  script, tracked by content hash, never re-checked after that. If you want
+  zsh, install and switch to it *before* `chezmoi init`:
+  ```bash
+  sudo apt install zsh   # or pacman/dnf, depending on distro
+  chsh -s $(which zsh)
+  ```
+  Skip this if bash is fine for now — you can always switch later, it just
+  means manually copying three lines from `.bashrc` into `.zshrc` afterward
+  instead of getting them for free (see "Manual installs" below).
 
-```bash
-chezmoi init --apply https://github.com/Ryan-ED/dotfiles # or your <git-remote-url>
-```
+With that done, jump to whichever machine type this is.
 
-You'll be prompted once for `machineClass`. After that, `chezmoi apply` is
-enough to pick up dotfile changes; the bootstrap scripts only re-run when
-their own template content changes (chezmoi tracks `run_once_*` scripts by
-content hash).
+### Standard (Arch, Fedora)
 
-To add packages later: edit `devbox.json` above, `chezmoi apply`, then
-`devbox global install` (or just re-run the relevant bootstrap script's body
-manually — it's idempotent).
+1. ```bash
+   chezmoi init --apply git@github.com:Ryan-ED/dotfiles.git
+   ```
+2. Answer `standard` at the `machineClass` prompt, plus `gitName` and
+   `gitEmail`. Everything else happens automatically: devbox/Nix install,
+   every `devbox.json` package, fontconfig registration, shell rc wiring,
+   `~/.gitconfig`, the nvim config.
+3. **Gotcha:** open a new terminal (or `exec $SHELL`) once it finishes —
+   your *current* shell has none of the new `PATH`/prompt/eval lines yet,
+   they only apply to shells started after the rc files were written.
+4. Sanity-check: `which nvim rg fd fzf lazygit starship pnpm fnm`.
+5. **Manual, do now:** install WezTerm itself (`dnf install wezterm` /
+   `pacman -S wezterm`) — never part of `devbox.json`; see "Manual
+   installs" below for why.
+6. **Manual, do once:** launch `nvim`. LazyVim bootstraps `lazy.nvim` and
+   installs all plugins on first run — needs internet, takes a minute or
+   two, compiles treesitter parsers via the `gcc` package. Run
+   `:checkhealth` afterward. Once you're happy with the plugin set, commit
+   `lazy-lock.json` back to the repo so other machines match:
+   ```bash
+   chezmoi add ~/.config/nvim/lazy-lock.json
+   ```
+7. **Optional, whenever:** the `hypr`/`i3`/`waybar` configs are already
+   sitting in `~/.config/`, inert, until you install the actual packages
+   and pick that session at your login manager.
 
-### WSL + native Windows
+### Bazzite
 
-The Windows 11 laptop needs `chezmoi init --apply <repo>` run in **two
-places**, because devbox/Nix work inside WSL but WezTerm's config has to
-land in the native Windows profile:
+1. **Prerequisite:** `distrobox` must already be on the host (ships by
+   default on Bazzite; install it first if it's somehow missing).
+2. ```bash
+   chezmoi init --apply git@github.com:Ryan-ED/dotfiles.git
+   ```
+   answering `bazzite` at the `machineClass` prompt (plus `gitName`/
+   `gitEmail`).
+3. This creates a Fedora Distrobox container named `devbox`, installs
+   devbox/Nix *inside* it (the host's immutable base is never touched),
+   then registers the container's fonts with the **host's** fontconfig
+   afterward.
+4. **Gotcha:** the devbox-installed binaries (`nvim`, `rg`, etc.) live
+   *inside* the container, not on the host `PATH`. Either
+   `distrobox enter devbox` every time, or export specific binaries:
+   ```bash
+   distrobox-export --bin /path/in/container/to/bin
+   ```
+5. **Manual, do now:** install WezTerm via Flatpak on the host —
+   `flatpak install flathub org.wezfurlong.wezterm` — never inside the
+   `devbox` container (circular: you'd need a working terminal to
+   `distrobox enter` in the first place).
+6. **Manual, do once:** same nvim first-launch step as Standard above —
+   `distrobox enter devbox`, then `nvim`, `:checkhealth`, then
+   `chezmoi add ~/.config/nvim/lazy-lock.json` once you're happy with it.
+7. **Optional, whenever:** same as Standard — hypr/i3/waybar are already
+   there, inert until you install the packages and switch sessions.
 
-1. **Inside WSL/Ubuntu** — installs chezmoi + git there if needed, then
-   `chezmoi init --apply <repo>`, answering `wsl` at the prompt. This does
-   the real work: devbox, Nix, starship, the nvim config.
-2. **Natively on Windows** — install chezmoi itself
-   (`winget install twpayne.chezmoi`), then run the same
-   `chezmoi init --apply <repo>` from PowerShell, answering `wsl` again (it's
-   a separate per-OS chezmoi config, so it asks again). The bootstrap script
-   no-ops immediately here (native Windows isn't Linux/macOS), so this run
-   just deploys plain dotfiles — in practice, `wezterm.lua`.
+### WSL (Windows 11 laptop)
 
-One thing to verify on that second, native-Windows run: chezmoi executes
-`.sh.tmpl` scripts by finding a `sh` interpreter on `PATH`, and even though
-our script no-ops immediately for `chezmoi.os == "windows"`, chezmoi still
-needs to *find* an interpreter to run it at all. Git for Windows (ships
-`sh.exe`) covers this in practice; if it's ever missing, that one script step
-would error rather than silently skip.
+This one needs `chezmoi init --apply` run in **two separate places**,
+because devbox/Nix only work inside WSL, but WezTerm is a native Windows
+GUI process that can't see anything deployed only into WSL's filesystem.
 
-### Bazzite caveat
+**Inside WSL/Ubuntu:**
 
-The Bazzite bootstrap script assumes `distrobox` is already present on the
-host (it ships by default on Bazzite; if not, install it before running
-`chezmoi apply`). It creates the container but does not auto-export every
-devbox binary to the host — do that per-binary with `distrobox-export` if you
-want e.g. `nvim` callable directly from the host shell instead of via
-`distrobox enter devbox`.
+1. Make sure `git` and `chezmoi` are installed *inside the WSL distro
+   itself* (`sudo apt install git`, then chezmoi's installer), and that
+   your SSH key works from there (`ssh -T git@github.com`).
+2. ```bash
+   chezmoi init --apply git@github.com:Ryan-ED/dotfiles.git
+   ```
+   answering `wsl` at the prompt. This does the real work — devbox, Nix,
+   starship, fnm, pnpm, the nvim config, fontconfig.
+3. Same gotchas as Standard apply here too: new shell afterward, nvim
+   first-launch step, decide on zsh *before* this step if you want it.
 
-### Manual installs (by design)
+**Natively on Windows:**
 
-Two things are deliberately **not** part of any bootstrap script, kept
-manual on purpose rather than automated:
+4. Install chezmoi on Windows itself:
+   ```powershell
+   winget install twpayne.chezmoi
+   ```
+5. ```powershell
+   chezmoi init --apply git@github.com:Ryan-ED/dotfiles.git
+   ```
+   answering `wsl` again — this is a *separate* per-OS chezmoi config from
+   the WSL one, so it asks again. The bootstrap script no-ops immediately
+   here (devbox/Nix aren't supported on native Windows), so this run only
+   deploys plain files — in practice, `wezterm.lua`.
+6. **Gotcha:** chezmoi still needs to *find* a shell interpreter just to
+   run (and immediately exit) the bootstrap script's `.sh.tmpl` file. Git
+   for Windows (which you need anyway) provides this; without it, that one
+   step errors instead of silently skipping.
+7. **Manual, do now:** install WezTerm on Windows:
+   `winget install wez.wezterm`.
+8. **Manual, do now:** install the Nerd Font *on Windows*, separately from
+   the one devbox already installed inside WSL:
+   `winget install --id DEVCOM.JetBrainsMonoNerdFont`. This is not
+   optional — WSL's copy is invisible to native Windows font rendering, and
+   WezTerm's icons won't show without doing this separately.
+9. **Skipped by design, no action needed:** `hypr`/`i3`/`waybar` never
+   deploy here at all (`.chezmoiignore.tmpl` excludes them when
+   `machineClass == wsl`) — there's no compositor to use them against.
+
+### Adding packages or config later
+
+Edit `devbox.json` above, `chezmoi apply`, then `devbox global install` (or
+just re-run the relevant bootstrap script's body manually — it's
+idempotent). See "Making changes and syncing them everywhere" below for the
+full edit → commit → `chezmoi update` cycle.
+
+### Manual installs, and why they're manual
+
+Two things are deliberately **not** part of any bootstrap script — see the
+walkthroughs above for exactly *when* to do each; this is the *why*:
 
 - **WezTerm itself.** Only its config (`dot_config/wezterm/wezterm.lua`,
-  item 6 above) is managed here — the application is installed separately,
-  per OS: `winget install wez.wezterm` on Windows, your distro's package
-  manager or `flatpak install flathub org.wezfurlong.wezterm` on Linux
-  (Flatpak specifically on Bazzite — see the Bazzite caveat above for why
-  devbox/Distrobox isn't the right place for it), `brew install --cask
-  wezterm` on macOS. It was left out of `devbox.json` because it's a GUI app
-  with real GPU/OpenGL rendering, and Nix-packaged GUI apps on non-NixOS
-  Linux sometimes hit graphics-driver mismatches that OS-native packaging
-  avoids — not worth the risk for the one application you'd be using to fix
-  things if it broke.
+  item 6 above) is managed here. It was left out of `devbox.json` because
+  it's a GUI app with real GPU/OpenGL rendering, and Nix-packaged GUI apps
+  on non-NixOS Linux sometimes hit graphics-driver mismatches that OS-native
+  packaging (or Flatpak, on Bazzite) avoids — not worth the risk for the one
+  application you'd be using to fix things if it broke.
 
 - **Switching to zsh.** The bootstrap script writes identical `devbox
   global shellenv` / `starship init` / `fnm env` lines to *both* `.bashrc`
   and `.zshrc` so either shell works, but it never installs zsh or runs
-  `chsh` to make it your login shell. That's a manual, one-time step:
-  ```bash
-  sudo apt install zsh      # or pacman/dnf, depending on distro
-  chsh -s $(which zsh)
-  ```
-  then open a new terminal. Reasoning: every script in this repo so far is
-  deliberately unprivileged (no `sudo`, one of the actual selling points of
-  devbox/Nix) — automating this would mean the first `sudo` call in the
-  whole setup, plus per-distro package-manager branching, just to save one
-  copy-pasted command.
-
-  **Ordering matters on a brand-new machine.** The bootstrap script decides
-  whether to touch `.zshrc` at all with a single check — `command -v zsh`,
-  i.e. "does zsh exist right now" — at the one and only moment it ever runs
-  (it's `run_once_*`, tracked by content hash, so it never re-checks later).
-  So on a **new** machine, install and switch to zsh *before* running
-  `chezmoi init --apply`:
-  ```bash
-  sudo apt install zsh      # or pacman/dnf, depending on distro
-  chsh -s $(which zsh)
-  ```
-  then `chezmoi init --apply <repo>`. Done in that order, the bootstrap
-  script's zsh check passes on its one run, and `.zshrc` gets the same
-  `devbox global shellenv` / `starship init zsh` / `fnm env` lines as
-  `.bashrc` automatically — no manual copying needed.
-
-  If zsh gets installed *after* chezmoi already bootstrapped that machine
-  (i.e. the order this repo's own WSL machine actually went through), the
-  script won't retroactively populate a `.zshrc` that didn't exist yet at
-  that time — copy the three `eval` lines over from `.bashrc` manually
-  (swap `starship init bash` for `starship init zsh`).
+  `chsh` itself. Every script in this repo is deliberately unprivileged (no
+  `sudo` — one of the actual selling points of devbox/Nix); automating this
+  would mean the first `sudo` call in the whole setup, plus per-distro
+  package-manager branching, just to save one copy-pasted command. If you
+  installed zsh *after* chezmoi already bootstrapped that machine (rather
+  than before, per step 0 above), the script won't retroactively populate a
+  `.zshrc` that didn't exist yet at that time — copy the three `eval` lines
+  over from `.bashrc` manually (swap `starship init bash` for
+  `starship init zsh`).
 
 ## Making changes and syncing them everywhere
 

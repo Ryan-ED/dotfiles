@@ -25,6 +25,34 @@ fi
 echo "Installing global devbox packages..."
 devbox global install
 
+{{- /* Nix doesn't register its installed fonts with the host's fontconfig on
+   non-NixOS systems (fontconfig only scans directories it's explicitly told
+   about, and devbox's shellenv only affects PATH, not font discovery). Only
+   relevant on Linux - macOS uses Core Text, not fontconfig, for font lookup. */ -}}
+{{- if eq .chezmoi.os "linux" }}
+DEVBOX_FONTS_DIR="$HOME/.local/share/devbox/global/default/.devbox/nix/profile/default/share/fonts"
+FONTCONFIG_FILE="$HOME/.config/fontconfig/fonts.conf"
+mkdir -p "$(dirname "$FONTCONFIG_FILE")"
+if [ ! -f "$FONTCONFIG_FILE" ]; then
+  cat > "$FONTCONFIG_FILE" <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>$DEVBOX_FONTS_DIR</dir>
+</fontconfig>
+EOF
+  echo "Created $FONTCONFIG_FILE registering devbox's font directory"
+elif ! grep -qF "$DEVBOX_FONTS_DIR" "$FONTCONFIG_FILE"; then
+  sed -i "s#</fontconfig>#  <dir>$DEVBOX_FONTS_DIR</dir>\n</fontconfig>#" "$FONTCONFIG_FILE"
+  echo "Added devbox's font directory to existing $FONTCONFIG_FILE"
+fi
+if command -v fc-cache >/dev/null 2>&1; then
+  fc-cache -f >/dev/null 2>&1 || true
+else
+  echo "fc-cache not found - fonts registered but cache not rebuilt yet" >&2
+fi
+{{- end }}
+
 append_once() {
   local rc_file="$1" line="$2"
   [ -f "$rc_file" ] || touch "$rc_file"
