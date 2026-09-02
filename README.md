@@ -220,15 +220,16 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
 
 9. **`dot_config/hypr/`, `dot_config/i3/`, `dot_config/waybar/`** — Hyprland
    and Waybar are a minimal, modern starter config (WezTerm as `$terminal`,
-   Dolphin as `$fileManager`, `mako` for notifications) meant to run
-   *alongside* KDE Plasma rather than replace it — pick the "Hyprland"
-   session at the SDDM login screen instead of Plasma's, everything else
-   (Plasma's own config, polkit agent, theming) is left alone. `i3` is a
-   separate, untouched legacy config for X11 boxes without Hyprland
-   available. All three are inert until you actually install and launch the
-   corresponding WM — chezmoi just makes sure `~/.config/hypr`,
-   `~/.config/i3`, and `~/.config/waybar` are already populated the moment
-   you do, on any current or future Linux box.
+   `mako` for notifications) deliberately kept distro/DE-agnostic: no
+   assumptions about which desktop environment, login manager, or polkit
+   agent is already on the box, so it's a `chezmoi apply` away from
+   dropping Hyprland in *alongside* whatever session already exists there —
+   just pick "Hyprland" at your display/login manager. `i3` is a separate,
+   untouched legacy config for X11 boxes without Hyprland available. All
+   three are inert until you actually install and launch the corresponding
+   WM — chezmoi just makes sure `~/.config/hypr`, `~/.config/i3`, and
+   `~/.config/waybar` are already populated the moment you do, on any
+   current or future Linux box.
 
    **`.chezmoiignore.tmpl`** excludes all three when `machineClass == "wsl"`
    or the target OS isn't Linux (native Windows, macOS) — those environments
@@ -313,10 +314,11 @@ With that done, jump to whichever machine type this is.
    chezmoi add ~/.config/nvim/lazy-lock.json
    ```
 7. **Optional, whenever:** the `hypr`/`i3`/`waybar` configs are already
-   sitting in `~/.config/`, inert, until you install the actual packages
-   (`dnf install hyprland waybar mako wofi grim slurp wl-clipboard
-   brightnessctl playerctl`) and pick "Hyprland" at the SDDM login screen —
-   it runs next to Plasma, not instead of it.
+   sitting in `~/.config/`, inert, until you install Hyprland itself plus
+   `waybar mako wofi grim slurp wl-clipboard brightnessctl playerctl` via
+   your distro's package manager (`pacman -S`, `dnf install`, etc.) and pick
+   "Hyprland" at your login manager — it runs next to whatever DE is
+   already installed, not instead of it.
 
 ### Bazzite
 
