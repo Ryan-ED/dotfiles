@@ -260,12 +260,26 @@ first-boot-to-working-machine walkthrough; skip the parts you already know.
   `~/bin/chezmoi` from a fresh login) — a directory that's very likely not
   on `PATH` yet, especially in zsh, which (unlike bash) never sources
   `.profile` at all. You'll get `command not found: chezmoi` immediately
-  after a successful install. `-b ~/.local/bin` targets a directory that's
-  reliably already on `PATH` on Ubuntu/WSL and most distros even before any
-  rc file exists. If you already hit this, either move the binary
-  (`mkdir -p ~/.local/bin && mv ~/bin/chezmoi ~/.local/bin/`) or just call it
-  by its full path once (`~/bin/chezmoi --version`) to confirm the install
-  itself worked.
+  after a successful install. `-b ~/.local/bin` avoids that on distros/shells
+  where `~/.local/bin` is already wired onto `PATH` before any rc file runs
+  (common on Ubuntu/WSL bash, via a stanza in the default `.bash_profile`) —
+  but that's a distro/shell convention, not something the installer or this
+  repo guarantees, and it does **not** hold for zsh on Fedora (or plenty of
+  other combinations): a fresh zsh has no `.zprofile`/`.profile` step that
+  would add it, so the binary can land exactly where you asked and still not
+  resolve. After installing, always confirm with `echo $PATH` before
+  assuming it worked. If `~/.local/bin` isn't listed, fix it before
+  continuing:
+  ```bash
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc   # or ~/.bashrc
+  exec $SHELL
+  ```
+  (`chezmoi init --apply` below will later manage `.zshrc`/`.bashrc` for
+  devbox's own tools, but chezmoi itself has to already resolve *before*
+  that first run, so this one line is on you.) In the meantime, either move
+  the binary (`mkdir -p ~/.local/bin && mv ~/bin/chezmoi ~/.local/bin/`) or
+  just call it by its full path once (`~/bin/chezmoi --version` or
+  `~/.local/bin/chezmoi --version`) to confirm the install itself worked.
 - **Your SSH key needs to already work against GitHub**, since the clone
   below goes over SSH:
   ```bash
