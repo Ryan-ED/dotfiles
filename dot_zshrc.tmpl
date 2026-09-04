@@ -17,7 +17,18 @@
   usual HISTFILE/compinit setup) never fires on any machine bootstrapped by this repo.
   Set the same things here instead, plain zsh options with no devbox dependency, so
   they apply unconditionally regardless of machineClass/container status.
+
+  The PATH line below exists for the same reason: unlike bash (which usually gets
+  ~/.local/bin added by a distro-shipped .bash_profile/.profile stanza), zsh has no
+  such convention and never sources .profile at all - so without this, a chezmoi
+  install via `get.chezmoi.io -- -b ~/.local/bin` (see README's "Before running
+  chezmoi at all") can leave the binary unreachable on zsh even though the exact
+  same install works fine under bash. This only helps on the *second* machine
+  onward, or after the very first manual fix - chezmoi obviously can't deploy this
+  file until it's already runnable once.
 */ -}}
+export PATH="$HOME/.local/bin:$PATH"
+
 HISTFILE="$HOME/.zsh_history"
 HISTSIZE=10000
 SAVEHIST=10000

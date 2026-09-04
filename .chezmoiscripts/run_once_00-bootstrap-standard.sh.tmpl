@@ -62,6 +62,14 @@ append_once() {
   fi
 }
 
+# Not every distro's default .bashrc adds ~/.local/bin to PATH (the ones that
+# do, do it conditionally on the directory already existing at shell-init
+# time) - and this is where `get.chezmoi.io -- -b ~/.local/bin` puts chezmoi
+# itself. append_once's dedup means this is a no-op wherever it's already
+# there. (.zshrc doesn't need this appended - it's fully chezmoi-managed and
+# carries the same line directly, see dot_zshrc.tmpl.)
+append_once "$HOME/.bashrc" 'export PATH="$HOME/.local/bin:$PATH"'
+
 # devbox shellenv must load first - starship and fnm are themselves devbox packages
 # and need to already be on PATH before their own init/hook commands can run.
 # (.zshrc doesn't need any of this - it's fully chezmoi-managed, see dot_zshrc.tmpl.)

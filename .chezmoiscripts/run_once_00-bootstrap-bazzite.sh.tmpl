@@ -14,6 +14,20 @@ exit 0
 
 set -euo pipefail
 
+# This whole script (and the initial chezmoi clone before it) runs on the bare
+# Bazzite HOST, not inside the container below - so if the host shell is bash
+# rather than zsh, it hits the same "chezmoi lands in ~/.local/bin, nothing
+# put that on PATH" gap covered for standard/wsl in
+# run_once_00-bootstrap-standard.sh.tmpl and for zsh (any machineClass) in
+# dot_zshrc.tmpl. Unlike that container-scoped devbox/starship/fnm block
+# further down (guarded by /run/.containerenv since those tools only exist
+# inside the container), this one is intentionally unguarded - it's a plain
+# PATH fix for the host shell itself.
+RC_FILE="$HOME/.bashrc"
+touch "$RC_FILE"
+grep -qF 'export PATH="$HOME/.local/bin:$PATH"' "$RC_FILE" || \
+  printf '\n# added by chezmoi (bazzite host)\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$RC_FILE"
+
 CONTAINER_NAME="devbox"
 
 if ! command -v distrobox >/dev/null 2>&1; then
