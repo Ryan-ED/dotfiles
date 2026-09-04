@@ -218,22 +218,22 @@ tooling. Goal: one repo, `chezmoi init --apply`, minimal per-machine upkeep.
    `lua/plugins/`. Requires the `neovim` package from `devbox.json` above (or
    any Neovim ≥ 0.9 on `PATH`).
 
-9. **`dot_config/hypr/`, `dot_config/i3/`, `dot_config/waybar/`** — Hyprland
-   and Waybar are a minimal, modern starter config (WezTerm as `$terminal`,
-   `mako` for notifications) deliberately kept distro/DE-agnostic: no
-   assumptions about which desktop environment, login manager, or polkit
-   agent is already on the box, so it's a `chezmoi apply` away from
-   dropping Hyprland in *alongside* whatever session already exists there —
-   just pick "Hyprland" at your display/login manager. `i3` is a separate,
-   untouched legacy config for X11 boxes without Hyprland available. All
-   three are inert until you actually install and launch the corresponding
-   WM — chezmoi just makes sure `~/.config/hypr`, `~/.config/i3`, and
-   `~/.config/waybar` are already populated the moment you do, on any
-   current or future Linux box.
+9. **`dot_config/hypr/`, `dot_config/waybar/`** — Hyprland and Waybar are a
+   minimal, modern starter config (WezTerm as `$terminal`, `mako` for
+   notifications) deliberately kept distro/DE-agnostic: no assumptions
+   about which desktop environment, login manager, or polkit agent is
+   already on the box, so it's a `chezmoi apply` away from dropping
+   Hyprland in *alongside* whatever session already exists there — just
+   pick "Hyprland" at your display/login manager. Both are inert until you
+   actually install and launch Hyprland — chezmoi just makes sure
+   `~/.config/hypr` and `~/.config/waybar` are already populated the
+   moment you do, on any current or future Linux box. (An `i3`/X11 config
+   used to live here too; dropped as unused legacy — it predated the
+   Hyprland setup and nobody was maintaining it.)
 
-   **`.chezmoiignore.tmpl`** excludes all three when `machineClass == "wsl"`
+   **`.chezmoiignore.tmpl`** excludes both when `machineClass == "wsl"`
    or the target OS isn't Linux (native Windows, macOS) — those environments
-   have no compositor/X server to run a tiling WM against, so the files would
+   have no compositor to run a tiling WM against, so the files would
    just be dead weight. They apply on `standard` and `bazzite` Linux
    machines regardless of which desktop environment is currently active
    there.
@@ -313,7 +313,7 @@ With that done, jump to whichever machine type this is.
    ```bash
    chezmoi add ~/.config/nvim/lazy-lock.json
    ```
-7. **Optional, whenever:** the `hypr`/`i3`/`waybar` configs are already
+7. **Optional, whenever:** the `hypr`/`waybar` configs are already
    sitting in `~/.config/`, inert, until you install Hyprland itself plus
    `waybar mako wofi grim slurp wl-clipboard brightnessctl playerctl` via
    your distro's package manager (`pacman -S`, `dnf install`, etc.) and pick
@@ -346,7 +346,7 @@ With that done, jump to whichever machine type this is.
 6. **Manual, do once:** same nvim first-launch step as Standard above —
    `distrobox enter devbox`, then `nvim`, `:checkhealth`, then
    `chezmoi add ~/.config/nvim/lazy-lock.json` once you're happy with it.
-7. **Optional, whenever:** same as Standard — hypr/i3/waybar are already
+7. **Optional, whenever:** same as Standard — hypr/waybar are already
    there, inert until you install the packages and switch sessions.
 
 ### WSL (Windows 11 laptop)
@@ -392,7 +392,7 @@ GUI process that can't see anything deployed only into WSL's filesystem.
    `winget install --id DEVCOM.JetBrainsMonoNerdFont`. This is not
    optional — WSL's copy is invisible to native Windows font rendering, and
    WezTerm's icons won't show without doing this separately.
-9. **Skipped by design, no action needed:** `hypr`/`i3`/`waybar` never
+9. **Skipped by design, no action needed:** `hypr`/`waybar` never
    deploy here at all (`.chezmoiignore.tmpl` excludes them when
    `machineClass == wsl`) — there's no compositor to use them against.
 
