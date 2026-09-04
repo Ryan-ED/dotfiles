@@ -1,12 +1,11 @@
 {{- /*
-  hypr/i3/waybar are Wayland/X11 tiling-WM configs - meaningless on a machine with no
+  hypr/waybar are Wayland tiling-WM configs - meaningless on a machine with no
   display server (WSL) or no Linux compositor at all (native Windows, macOS). Keeping
   them in the repo means they're a `chezmoi apply` away the moment you actually put a
   tiling WM on a Linux box, without cluttering every other machine in the meantime.
 */ -}}
 {{- if or (eq .machineClass "wsl") (ne .chezmoi.os "linux") }}
 .config/hypr
-.config/i3
 .config/waybar
 {{- end }}
 {{- /* .zshrc is meaningless on native Windows (no zsh there at all) but valid on macOS. */ -}}

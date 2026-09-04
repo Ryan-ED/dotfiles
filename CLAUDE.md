@@ -61,8 +61,8 @@ the bootstrap scripts (and `devbox global install`) reconcile against it. GUI ap
 manage their own version state (WezTerm, zsh itself) are deliberately kept *out* of `devbox.json` — see the
 README's "Manual installs, and why they're manual" section for the specific reasoning per tool.
 
-**`dot_config/hypr/`, `dot_config/i3/`, `dot_config/waybar/`** are inert configs (no logic reads them until you
-install/launch those WMs). `.chezmoiignore.tmpl` excludes all three when `machineClass == wsl` or the target OS
+**`dot_config/hypr/`, `dot_config/waybar/`** are inert configs (no logic reads them until you
+install/launch Hyprland). `.chezmoiignore.tmpl` excludes both when `machineClass == wsl` or the target OS
 isn't Linux, since there's no compositor to target on those platforms.
 
 **`dot_config/nvim/`** is an unmodified LazyVim starter scaffold. Real personal config should go in new files
